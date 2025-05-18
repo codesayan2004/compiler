@@ -34,5 +34,8 @@ cd compiler
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+python3 manage.py makemigrations
+python3 manage.py migrate
 python manage.py runserver
-
+```
+## 🚀 Open the URL
