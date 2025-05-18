@@ -29,5 +29,10 @@ An online code compiler built using **Django**, allowing users to write, submit,
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/online-code-compiler.git
-cd online-code-compiler
+https://github.com/codesayan2004/compiler.git
+cd compiler
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python manage.py runserver
+
