@@ -24,6 +24,7 @@ def submit_code(request):
         # Process the code submission
         result = run(submission.code, submission.language, submission.input_data)
         # Update the submission with the result
+        result = result.strip()  # Clean up any leading/trailing whitespace
         submission.result = result
         submission.status = 'completed'
         submission.save()
@@ -46,12 +47,17 @@ def run(code, language, input_data):
         dir_path = project_path / directory
         if not dir_path.exists():
             dir_path.mkdir(parents=True, exist_ok=True)
+
     codes_dir = project_path / "codes"
     inputs_dir = project_path / "inputs"
     outputs_dir = project_path / "outputs"
     unique = str(uuid.uuid4())
 
-    code_file = codes_dir / f"{unique}.{language}"
+    if language == 'java':
+        code_file = codes_dir / "Main.java"  # Always Main.java for Java
+    else:
+        code_file = codes_dir / f"{unique}.{language}"
+
     input_file = inputs_dir / f"{unique}_input.txt"
     output_file = outputs_dir / f"{unique}_output.txt"
     exe_file = codes_dir / unique
@@ -62,66 +68,76 @@ def run(code, language, input_data):
 
     try:
         if language == 'cpp':
-            exe_path = codes_dir / unique
-            compile_cmd = ['g++', str(code_file), '-o', str(exe_path)]
+            compile_cmd = ['g++', str(code_file), '-o', str(exe_file)]
             compile_result = subprocess.run(compile_cmd, capture_output=True, text=True)
-
             if compile_result.returncode != 0:
                 return "Compilation Error:\n" + compile_result.stderr
 
-            try:
-                with open(input_file, 'r') as f, open(output_file, 'w') as out_f:
-                    exec_result = subprocess.run(
-                        [str(exe_path)],
-                        stdin=f,
-                        stdout=out_f,
-                        stderr=subprocess.PIPE,  # capture stderr separately
-                        timeout=5
-                    )
-            except subprocess.TimeoutExpired:
-                return "Time Limit Exceeded"
-            except Exception as e:
-                return f"Unexpected Error: {str(e)}"
-        
+            with open(input_file, 'r') as f, open(output_file, 'w') as out_f:
+                exec_result = subprocess.run(
+                    [str(exe_file)], stdin=f, stdout=out_f, stderr=subprocess.PIPE, timeout=5
+                )
+
         elif language == 'c':
-            exe_path = codes_dir / unique
-            compile_cmd = ['gcc', str(code_file), '-o', str(exe_path)]
-            result = subprocess.run(compile_cmd, capture_output=True, text=True)
-            if result.returncode != 0:
-                return "Compilation Error:\n" + result.stderr
-            try:
-                with open(input_file, 'r') as f, open(output_file, 'w') as out_f:
-                    subprocess.run(
-                        [str(exe_path)], stdin=f, stdout=out_f, timeout=5
-                    )
-            except subprocess.TimeoutExpired:
-                return "Time Limit Exceeded"
+            compile_cmd = ['gcc', str(code_file), '-o', str(exe_file)]
+            compile_result = subprocess.run(compile_cmd, capture_output=True, text=True)
+            if compile_result.returncode != 0:
+                return "Compilation Error:\n" + compile_result.stderr
+
+            with open(input_file, 'r') as f, open(output_file, 'w') as out_f:
+                subprocess.run([str(exe_file)], stdin=f, stdout=out_f, timeout=5)
 
         elif language == 'py':
-            try:
-                with open(input_file, 'r') as f, open(output_file, 'w') as out_f:
-                    subprocess.run(
-                        ['python3', str(code_file)],
-                        stdin=f,
-                        stdout=out_f,
-                        stderr=subprocess.STDOUT,
-                        timeout=5  # You can change this as needed
-                    )
-            except subprocess.TimeoutExpired:
-                return "Time Limit Exceeded"
-            except Exception as e:
-                return f"Runtime Error: {str(e)}"
+            with open(input_file, 'r') as f, open(output_file, 'w') as out_f:
+                subprocess.run(
+                    ['python3', str(code_file)],
+                    stdin=f, stdout=out_f, stderr=subprocess.STDOUT, timeout=5
+                )
+
+        elif language == 'java':
+            compile_cmd = ['javac', str(code_file)]
+            compile_result = subprocess.run(compile_cmd, capture_output=True, text=True)
+            if compile_result.returncode != 0:
+                return "Compilation Error:\n" + compile_result.stderr
+
+            with open(input_file, 'r') as f, open(output_file, 'w') as out_f:
+                subprocess.run(
+                    ['java', '-cp', str(codes_dir), 'Main'],
+                    stdin=f, stdout=out_f, stderr=subprocess.STDOUT, timeout=5
+                )
+
+        elif language == 'js':
+            with open(input_file, 'r') as f, open(output_file, 'w') as out_f:
+                subprocess.run(
+                    ['node', str(code_file)],
+                    stdin=f, stdout=out_f, stderr=subprocess.STDOUT, timeout=5
+                )
 
         else:
-            return "Unsupported language"
+            return "Unsupported language!"
+
         return output_file.read_text()
+
+    except subprocess.TimeoutExpired:
+        return "Time Limit Exceeded"
     except Exception as e:
-        return f"Runtime Error! : {str(e)}"
+        return f"Runtime Error: {str(e)}"
     finally:
         # Clean up temporary files
-        for file in [code_file, input_file, output_file, exe_file]:
+        try:
+            if code_file.exists() and language != 'java':
+                code_file.unlink()
+            elif language == 'java':
+                # Delete all java class files also
+                class_file = codes_dir / "Main.class"
+                if class_file.exists():
+                    class_file.unlink()
+        except Exception as e:
+            print(f"Could not delete code file: {e}")
+
+        for file in [input_file, output_file, exe_file]:
             try:
                 if file.exists():
                     file.unlink()
             except Exception as e:
-                print(f"Warning: Could not delete file {file}: {e}")
+                print(f"Could not delete file {file}: {e}")

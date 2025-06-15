@@ -8,6 +8,7 @@ class CodeSubmission(models.Model):
         ('cpp', 'C++'),
         ('java', 'Java'),
         ('c', 'C'),
+        ('js', 'JavaScript'),
     ]
     code = models.TextField()
     language = models.CharField(max_length=10, choices=language_choices)
